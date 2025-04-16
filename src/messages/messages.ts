@@ -1,5 +1,4 @@
-import { useSelector } from "react-redux";
-import { RootState } from "@/redux/store/store";
+import { useLanguageStore } from "@/stores/useLanguageStore";
 import MessagesProps from "./messages-interface";
 import enUS from "./languages/en-us";
 import ruRU from "./languages/ru-ru";
@@ -8,7 +7,7 @@ import viVN from "./languages/vi-vn";
 export default function useMessages(): MessagesProps {
     let messages: MessagesProps;
 
-    const language = useSelector((state: RootState) => state.language.language);
+    const { language } = useLanguageStore();
 
     switch (language) {
         case "en-us":

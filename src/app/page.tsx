@@ -3,40 +3,32 @@
 import Image from "next/image";
 import Link from "next/link";
 
-import { useSelector, useDispatch } from "react-redux";
-import { loginSuccess, logoutSuccess } from "@/redux/slice/auth-slice";
-import { changeLanguage } from "@/redux/slice/language-slice";
-import { RootState } from "@/redux/store/store";
+import { useAuthStore } from "@/stores/useAuthStore";
+import { useLanguageStore } from "@/stores/useLanguageStore";
 import useMessages from "@/messages/messages";
 
 const cc: string = "flex min-h-screen flex-col items-center justify-between p-24";
 
 export default function Home() {
-    const dispatch = useDispatch();
-    const theme = useSelector((state: RootState) => state.auth.user);
-    const lang = useSelector((state: RootState) => state.language.language);
+    const { login, logout, user } = useAuthStore();
+    const { language, setLanguage } = useLanguageStore();
     const messages = useMessages();
 
     function handleLogin() {
-        dispatch(
-            loginSuccess({
-                name: "John Doe",
-                email: "CC@lmao.com",
-            }),
-        );
+        login({ name: "John Doe", email: "CC@lmao.com" });
     }
 
     function handleLogout() {
-        dispatch(logoutSuccess());
+        logout();
     }
 
     function handleLanguageChange() {
-        if (lang === "vi-vn") {
-            dispatch(changeLanguage("en-us"));
-        } else if (lang === "en-us") {
-            dispatch(changeLanguage("ru-ru"));
+        if (language === "vi-vn") {
+            setLanguage("en-us");
+        } else if (language === "en-us") {
+            setLanguage("ru-ru");
         } else {
-            dispatch(changeLanguage("vi-vn"));
+            setLanguage("vi-vn");
         }
     }
 
@@ -164,7 +156,7 @@ export default function Home() {
                 <button
                     type="button"
                     className="group rounded-lg border border-transparent px-5 py-4 transition-colors hover:border-gray-300 hover:bg-gray-100 hover:dark:border-neutral-700 hover:dark:bg-neutral-800/30"
-                    onClick={() => console.log(theme)}
+                    onClick={() => console.log(user)}
                 >
                     <h2 className="mb-3 text-2xl font-semibold">
                         Templates{" "}
