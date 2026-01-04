@@ -1,54 +1,45 @@
 "use client";
 
-import { useRef, useState, useCallback, FormEvent } from "react";
+import { useState, useCallback } from "react";
 import { z } from "zod";
 import { createFormValidator, ValidationResult } from "@/utils/form-validation";
 
 /**
- * Props for the useFormUncontrolled hook
+ * Props for the useForm hook
  */
-type UseFormUncontrolledProps<T extends z.ZodType> = {
+type UseFormProps<T extends z.ZodType> = {
     schema: T;
-    defaultValues?: Partial<z.infer<T>>;
+    initialValues?: Partial<z.infer<T>>;
     onSubmit?: (values: z.infer<T>) => void | Promise<void>;
 };
 
 /**
- * Hook for handling form state and validation with Zod using uncontrolled inputs
- * Uses refs instead of state to avoid unnecessary re-renders
+ * Hook for handling form state and validation with Zod
  */
-export function useFormUncontrolled<T extends z.ZodType>({
+export function useForm<T extends z.ZodType>({
     schema,
-    defaultValues = {},
+    initialValues = {},
     onSubmit,
-}: UseFormUncontrolledProps<T>) {
+}: UseFormProps<T>) {
     type FormValues = z.infer<T>;
 
     // Create validator from schema
     const validator = createFormValidator(schema);
 
-    // Use refs instead of state for values to prevent re-renders
-    const formValues = useRef<Partial<FormValues>>(defaultValues);
-
-    // We still need some state for UI feedback
+    // State
+    const [values, setValues] = useState<Partial<FormValues>>(initialValues);
     const [errors, setErrors] = useState<Record<string, string[]>>({});
+    const [touched, setTouched] = useState<Record<string, boolean>>({});
     const [isSubmitting, setIsSubmitting] = useState(false);
 
     /**
-     * Get current form values from the refs
+     * Handle change for any form field
      */
-    const getFormValues = useCallback((): Partial<FormValues> => {
-        return formValues.current;
-    }, []);
-
-    /**
-     * Update a form value in the ref (doesn't cause re-render)
-     */
-    const setValue = useCallback(
+    const handleChange = useCallback(
         (field: keyof FormValues, value: any) => {
-            formValues.current = { ...formValues.current, [field]: value };
+            setValues((prev) => ({ ...prev, [field]: value }));
 
-            // Clear errors for this field if they exist
+            // Clear errors on change
             if (errors[field as string]) {
                 setErrors((prev) => {
                     const newErrors = { ...prev };
@@ -61,32 +52,36 @@ export function useFormUncontrolled<T extends z.ZodType>({
     );
 
     /**
-     * Reset form to default values
+     * Mark field as touched on blur
      */
-    const resetForm = useCallback(() => {
-        formValues.current = defaultValues;
-        setErrors({});
-        setIsSubmitting(false);
-    }, [defaultValues]);
+    const handleBlur = useCallback(
+        (field: keyof FormValues) => {
+            setTouched((prev) => ({ ...prev, [field]: true }));
+
+            // Validate individual field on blur
+            const result = validator.validate({ ...values });
+            if (!result.success && result.errors && result.errors[field as string]) {
+                setErrors((prev) => ({ ...prev, [field]: result.errors?.[field as string] || [] }));
+            }
+        },
+        [values, validator],
+    );
 
     /**
-     * Validate entire form without submitting
+     * Reset form to initial values
      */
-    const validateForm = useCallback((): ValidationResult<FormValues> => {
-        const result = validator.validate(formValues.current);
-        if (!result.success) {
-            setErrors(result.errors || {});
-        } else {
-            setErrors({});
-        }
-        return result;
-    }, [validator]);
+    const resetForm = useCallback(() => {
+        setValues(initialValues);
+        setErrors({});
+        setTouched({});
+        setIsSubmitting(false);
+    }, [initialValues]);
 
     /**
      * Handle form submission
      */
     const handleSubmit = useCallback(
-        async (e?: FormEvent) => {
+        async (e?: React.FormEvent) => {
             if (e) {
                 e.preventDefault();
             }
@@ -94,16 +89,21 @@ export function useFormUncontrolled<T extends z.ZodType>({
             setIsSubmitting(true);
 
             // Validate all fields
-            const result = validator.validate(formValues.current);
+            const result = validator.validate(values);
 
             if (!result.success) {
                 setErrors(result.errors || {});
                 setIsSubmitting(false);
+
+                // Mark all fields with errors as touched
+                const newTouched = { ...touched };
+                Object.keys(result.errors || {}).forEach((key) => {
+                    newTouched[key] = true;
+                });
+                setTouched(newTouched);
+
                 return false;
             }
-
-            // Clear errors on successful validation
-            setErrors({});
 
             try {
                 // Call onSubmit handler if provided
@@ -118,72 +118,40 @@ export function useFormUncontrolled<T extends z.ZodType>({
                 setIsSubmitting(false);
             }
         },
-        [validator, onSubmit],
+        [values, validator, onSubmit, touched],
     );
 
+    /**
+     * Validate the entire form without submitting
+     */
+    const validateForm = useCallback((): ValidationResult<FormValues> => {
+        const result = validator.validate(values);
+        if (!result.success) {
+            setErrors(result.errors || {});
+        }
+        return result;
+    }, [values, validator]);
+
     return {
-        getValues: getFormValues,
-        setValue,
+        values,
         errors,
+        touched,
         isSubmitting,
+        handleChange,
+        handleBlur,
         handleSubmit,
         resetForm,
         validateForm,
-        register: (field: keyof FormValues) => {
-            // Return proper props for uncontrolled inputs
-            return {
-                name: field,
-                defaultValue: defaultValues[field],
-                onChange: (
-                    e: React.ChangeEvent<
-                        HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement
-                    >,
-                ) => setValue(field, e.target.value),
-                "aria-invalid": errors[field as string] ? "true" : "false",
-                ref: (node: HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement | null) => {
-                    if (node) {
-                        // Manually update the ref value when the node changes
-                        const updateRef = () => {
-                            setValue(field, node.value);
-                        };
-
-                        // Add event listeners to capture value changes
-                        // We're using change event to capture when the value actually changes
-                        node.addEventListener("change", updateRef);
-
-                        // Cleanup on unmount
-                        return () => {
-                            node.removeEventListener("change", updateRef);
-                        };
-                    }
-                },
-            };
-        },
-        // For checkbox and radio inputs
-        registerChecked: (field: keyof FormValues) => {
-            return {
-                name: field,
-                defaultChecked: Boolean(defaultValues[field]),
-                onChange: (e: React.ChangeEvent<HTMLInputElement>) =>
-                    setValue(field, e.target.checked),
-                "aria-invalid": errors[field as string] ? "true" : "false",
-                ref: (node: HTMLInputElement | null) => {
-                    if (node) {
-                        // For checkboxes/radios we track the checked property
-                        const updateRef = () => {
-                            setValue(field, node.checked);
-                        };
-
-                        node.addEventListener("change", updateRef);
-
-                        return () => {
-                            node.removeEventListener("change", updateRef);
-                        };
-                    }
-                },
-            };
-        },
+        register: (field: keyof FormValues) => ({
+            name: field,
+            value: values[field],
+            onChange: (
+                e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>,
+            ) => handleChange(field, e.target.value),
+            onBlur: () => handleBlur(field),
+            "aria-invalid": touched[field as string] && errors[field as string] ? "true" : "false",
+        }),
     };
 }
 
-export default useFormUncontrolled;
+export default useForm;

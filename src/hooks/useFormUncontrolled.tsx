@@ -130,11 +130,6 @@ export function useFormUncontrolled<T extends z.ZodType>({
         return String(value); // Convert any other type to string
     };
 
-    // Helper to determine if a field has errors
-    const fieldHasError = (field: keyof FormValues): boolean => {
-        return Boolean(errors[field as string] && errors[field as string].length > 0);
-    };
-
     return {
         getValues: getFormValues,
         setValue,

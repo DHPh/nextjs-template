@@ -3,7 +3,7 @@
 import React from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { useForm } from "@/hooks/useControlledForm";
+import { useForm } from "@/hooks/useForm";
 import { loginSchema, type LoginFormValues } from "@/utils/form-schemas";
 import FormInput from "@/components/global/FormInput";
 import { useAuthStore } from "@/stores/useAuthStore";
